@@ -1,2 +1,1 @@
-# game
-bude zapovnyatusya Khvorostenko Damirom
+# about project
