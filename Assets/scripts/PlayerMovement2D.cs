@@ -2,110 +2,166 @@ using UnityEngine;
 
 public class PlayerMovement2D : MonoBehaviour
 {
-    [Header("Движение")]
-    public float moveSpeed = 8f; // Скорость ходьбы
-    
-    [Header("Прыжок")]
-    public float jumpForce = 12f; // Сила прыжка
-    public Transform groundCheck; // проверка земля (центр квадрата под ногами)
-    public LayerMask groundLayer; // земля
-    public Vector2 boxSize = new Vector2(0.9f, 0.15f); // Размер квадрата: ширина почти как перс, высота мелкая для точности
-    
+    [Header("Бинды клавиш")]
+    public KeyCode jumpKey = KeyCode.Space;
+    public KeyCode dashKey = KeyCode.LeftShift;
+    public KeyCode attackKey = KeyCode.Mouse0;
+    public KeyCode dodgeKey = KeyCode.LeftAlt;
+
+    [Header("Настройки движения")]
+    public float moveSpeed = 8f;
+    public float jumpForce = 12f;
+
     [Header("Дэш")]
-    public float dashForce = 20f; // Сила рывка, чем больше тем дальше
-    public float dashDuration = 0.15f; // Сколько длится дэш, короткий для баланса вселенной
-    public float dashCooldown = 1f; // антиспам
-    
+    public float dashForce = 20f;
+    public float dashDuration = 0.15f;
+    public float dashCooldown = 1f;
+
+    [Header("Додж (Уворот)")]
+    public float dodgeDuration = 0.5f; // Время неуязвимости в сек. (0.5 = 500мс)
+    public float dodgeCooldown = 1.5f;
+    public int playerLayer = 3;  // Слой игрока
+    public int enemyLayer = 6;  // Слой врага (проверь в Unity!)
+
+    [Header("Проверка земли")]
+    public Transform groundCheck;
+    public LayerMask groundLayer;
+    public Vector2 boxSize = new Vector2(0.9f, 0.15f);
+
+    [Header("Имена параметров Animator")]
+    public string pIsRunning = "isRunning";
+    public string pIsGrounded = "isGrounded";
+    public string pYVelocity = "yVelocity";
+    public string pAttack = "attack";
+    public string pDash = "dash";
+    public string pDodge = "dodge"; // Параметр для анимации доджа
+    public string pDie = "die";
+
     private Rigidbody2D rb;
-    private float horizontalInput; // Ввод по горизонтали A/D или стрелки
-    private bool isFacingRight = true; // фейсинг сторона
-    private bool isDashing = false; // Флаг дэша
-    private float dashTimer = 0f; // длительность деша
-    private float cooldownTimer = 0f; // антиспам контроль
-    
+    private Animator anim;
+    private float horizontalInput;
+    private bool isFacingRight = true;
+    private bool isDashing = false;
+    private bool isDodging = false;
+    private float dashTimer = 0f;
+    private float dashCooldownTimer = 0f;
+    private float dodgeCooldownTimer = 0f;
+    private bool isDead = false;
+
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>(); // Берём ригидбади без него будет капут пезда и бро ты умрешь и.т.д
+        rb = GetComponent<Rigidbody2D>();
+        anim = GetComponent<Animator>();
     }
-    
+
     void Update()
     {
-        // Эта хуйня отключает клаву при шифте
-        if (isDashing) return; 
-        
-        horizontalInput = Input.GetAxisRaw("Horizontal"); // Берём ввод, Raw так в ютубе сказали+так более резко будет по идее
-        
-        // Прыжок на пробел, но только если на земле
-        if (Input.GetKeyDown(KeyCode.Space) && IsGrounded())
+        if (isDead || isDashing) return;
+
+        horizontalInput = Input.GetAxisRaw("Horizontal");
+
+        // Прыжок
+        if (Input.GetKeyDown(jumpKey) && IsGrounded())
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
-        
-        // Дэш на Left Shift — рывок в сторону мыши только по X
-        if (Input.GetKeyDown(KeyCode.LeftShift) && cooldownTimer <= 0f)
+
+        // Атака
+        if (Input.GetKeyDown(attackKey))
+        {
+            anim.SetTrigger(pAttack);
+        }
+
+        // Дэш
+        if (Input.GetKeyDown(dashKey) && dashCooldownTimer <= 0f)
         {
             StartDash();
         }
-        
-        // Поворот по клавишам, пока не в дэше
-        if (horizontalInput > 0) isFacingRight = true;
-        else if (horizontalInput < 0) isFacingRight = false;
-        
-        // Флип
-        transform.localScale = new Vector3(isFacingRight ? 1 : -1, 1, 1);
-        
-        // антиспам
-        if (cooldownTimer > 0f) cooldownTimer -= Time.deltaTime;
+
+        // ДОДЖ
+        if (Input.GetKeyDown(dodgeKey) && dodgeCooldownTimer <= 0f && !isDodging)
+        {
+            StartDodge();
+        }
+
+        FlipLogic();
+        UpdateAnimatorParams();
+
+        if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
+        if (dodgeCooldownTimer > 0f) dodgeCooldownTimer -= Time.deltaTime;
     }
-    
+
     void FixedUpdate()
     {
-        // Во время дэша вообще ничего не трогаем а то капут физика пезда бро ты умрешь и.т.д
+        if (isDead) return;
+
         if (isDashing)
         {
             dashTimer -= Time.fixedDeltaTime;
             if (dashTimer <= 0f)
             {
                 isDashing = false;
-                cooldownTimer = dashCooldown; // антиспам
+                dashCooldownTimer = dashCooldown;
             }
             return;
         }
-        
-        // Обычная ходьба
+
         rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
     }
-    
+
+    void UpdateAnimatorParams()
+    {
+        anim.SetBool(pIsRunning, Mathf.Abs(horizontalInput) > 0.1f);
+        anim.SetBool(pIsGrounded, IsGrounded());
+        anim.SetFloat(pYVelocity, rb.linearVelocity.y);
+    }
+
+    void FlipLogic()
+    {
+        if (horizontalInput > 0) isFacingRight = true;
+        else if (horizontalInput < 0) isFacingRight = false;
+        transform.localScale = new Vector3(isFacingRight ? 1 : -1, 1, 1);
+    }
+
     private void StartDash()
     {
-        // Берём позицию мыши в мире
-        Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        mouseWorldPos.z = 0f; // зет нахуй не нужен
-        
-        // Считаем направление только по X
-        float dashDirection = Mathf.Sign(mouseWorldPos.x - transform.position.x);
-        
-        // Если мышь ровно над головой — дэшим по текущему направлению
-        if (dashDirection == 0f) dashDirection = isFacingRight ? 1f : -1f;
-        
-        // Поворачиваем перса в сторону дэша
-        isFacingRight = dashDirection > 0f;
-        transform.localScale = new Vector3(isFacingRight ? 1 : -1, 1, 1);
-        
-        // Запускаем дэш
         isDashing = true;
         dashTimer = dashDuration;
-        rb.linearVelocity = new Vector2(dashDirection * dashForce, 0f); // Y сбрасываем
+        anim.SetTrigger(pDash);
+        float dashDir = isFacingRight ? 1f : -1f;
+        rb.linearVelocity = new Vector2(dashDir * dashForce, 0f);
     }
-    
-    // НОВАЯ ПРОВЕРКА ЗЕМЛИ — КВАДРАТОМ, БРО! Надёжнее круга в 100 раз
-    private bool IsGrounded()
+
+    private void StartDodge()
     {
-        // OverlapBox: позиция центра, размер бокса, угол 0 (не крутим), слой земли
-        return Physics2D.OverlapBox(groundCheck.position, boxSize, 0f, groundLayer);
+        isDodging = true;
+        dodgeCooldownTimer = dodgeCooldown;
+        anim.SetTrigger(pDodge);
+        
+        // Отключаем столкновение между слоем игрока и врага
+        Physics2D.IgnoreLayerCollision(playerLayer, enemyLayer, true);
+        
+        // Возвращаем коллизию через время dodgeDuration
+        Invoke("EndDodge", dodgeDuration);
     }
-    
-    // чтоб видеть где проверка земли — теперь квадрат, полезно когда все по пизде
+
+    private void EndDodge()
+    {
+        isDodging = false;
+        Physics2D.IgnoreLayerCollision(playerLayer, enemyLayer, false);
+    }
+
+    public void Die()
+    {
+        if (isDead) return;
+        isDead = true;
+        anim.SetTrigger(pDie);
+        rb.linearVelocity = Vector2.zero;
+        rb.simulated = false;
+    }
+
+    private bool IsGrounded() => Physics2D.OverlapBox(groundCheck.position, boxSize, 0f, groundLayer);
+
     void OnDrawGizmosSelected()
     {
         if (groundCheck != null)
