@@ -1,14 +1,14 @@
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 public class PlayerHealth : MonoBehaviour
 {
-    [Header("Параметры HP")]
+    [Header("HP")]
     public float maxHealth = 100f;
     public float currentHealth;
 
-    [Header("UI Ссылки")]
-    public Text healthText;
+    [Header("UI")]
+    public TextMeshProUGUI healthText;
 
     private PlayerDeath deathScript;
 
