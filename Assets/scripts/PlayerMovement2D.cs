@@ -18,10 +18,10 @@ public class PlayerMovement2D : MonoBehaviour
     public float dashCooldown = 1f;
 
     [Header("Додж (Уворот)")]
-    public float dodgeDuration = 0.5f; // Время неуязвимости в сек. (0.5 = 500мс)
+    public float dodgeDuration = 0.5f; 
     public float dodgeCooldown = 1.5f;
-    public int playerLayer = 3;  // Слой игрока
-    public int enemyLayer = 6;  // Слой врага (проверь в Unity!)
+    public int playerLayer = 3;  
+    public int enemyLayer = 6;  
 
     [Header("Проверка земли")]
     public Transform groundCheck;
@@ -34,7 +34,7 @@ public class PlayerMovement2D : MonoBehaviour
     public string pYVelocity = "yVelocity";
     public string pAttack = "attack";
     public string pDash = "dash";
-    public string pDodge = "dodge"; // Параметр для анимации доджа
+    public string pDodge = "dodge"; 
     public string pDie = "die";
 
     private Rigidbody2D rb;
@@ -60,25 +60,25 @@ public class PlayerMovement2D : MonoBehaviour
 
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
-        // Прыжок
+        // делай джамп
         if (Input.GetKeyDown(jumpKey) && IsGrounded())
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
 
-        // Атака
+        // бум
         if (Input.GetKeyDown(attackKey))
         {
             anim.SetTrigger(pAttack);
         }
 
-        // Дэш
+        // не бум
         if (Input.GetKeyDown(dashKey) && dashCooldownTimer <= 0f)
         {
             StartDash();
         }
 
-        // ДОДЖ
+        // нит
         if (Input.GetKeyDown(dodgeKey) && dodgeCooldownTimer <= 0f && !isDodging)
         {
             StartDodge();
@@ -138,10 +138,10 @@ public class PlayerMovement2D : MonoBehaviour
         dodgeCooldownTimer = dodgeCooldown;
         anim.SetTrigger(pDodge);
         
-        // Отключаем столкновение между слоем игрока и врага
+        
         Physics2D.IgnoreLayerCollision(playerLayer, enemyLayer, true);
         
-        // Возвращаем коллизию через время dodgeDuration
+        
         Invoke("EndDodge", dodgeDuration);
     }
 
